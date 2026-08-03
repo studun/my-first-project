@@ -16,15 +16,15 @@ exports.createSale = async (req, res) => {
 
             if (!medicine) {
                 await t.rollback();
-                return res.status(404).json({ error: Medicine with ID ${item.medicineId} not found });
+                return res.status(404).json({ error: `Medicine with ID ${item.medicineId} not found` });
             }
 
             if (medicine.stock_quantity < item.quantity) {
                 await t.rollback();
-                return res.status(400).json({ error: Insufficient stock for medicine: ${medicine.name} });
+                return res.status(400).json({ error: `Insufficient stock for medicine: ${medicine.name}` });
             }
 
-            const itemPrice = item.price  medicine.price  0;
+            const itemPrice = item.price || medicine.price||  0;
             total_amount += itemPrice * item.quantity;
 
             processedItems.push({
