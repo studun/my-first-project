@@ -1,80 +1,103 @@
-const { INITIALLY_DEFERRED } = require('sequelize/lib/deferrable');
-const { Sale, SaleItem, Medicine, sequelize } = require('../models'); // تأكد من مسارات النماذج لديك
+const { Sale, SaleItem, Medicine, sequelize } = require("../models");
 
 exports.createSale = async (req, res) => {
-    // بدء Transaction لحماية البيانات
+    const { items, customer_name, payment_type } = req.body;
+
+    if (!items || items.length === 0) {
+        return res.status(400).json({ msg: "Please provide at least one item for the sale" });
+    }
+
     const t = await sequelize.transaction();
     
     try {
-        const { items } = req.body; // يتوقع مصفوفة تحتوي على [{ medicineId, quantity, price }]
         let total_amount = 0;
         const processedItems = [];
 
-        // 1. التحقق من الأدوية والمخزون وحساب السعر
         for (const item of items) {
             const medicine = await Medicine.findByPk(item.medicineId, { transaction: t });
 
             if (!medicine) {
-                await t.rollback();
-                return res.status(404).json({ error: `Medicine with ID ${item.medicineId} not found` });
+                throw new Error(`Medicine with ID ${item.medicineId} not found`);
             }
 
-            if (medicine.stock_quantity < item.quantity) {
-                await t.rollback();
-                return res.status(400).json({ error: `Insufficient stock for medicine: ${medicine.name}` });
+            const quantity = parseInt(item.quantity);
+            if (medicine.stock_quantity < quantity) {
+                throw new Error(`Insufficient stock for medicine: ${medicine.name} (Available: ${medicine.stock_quantity})`);
             }
 
-            const itemPrice = item.price || medicine.price||  0;
-            total_amount += itemPrice * item.quantity;
+            const unitPrice = parseFloat(item.unit_price) || parseFloat(medicine.selling_price);
+            const itemTotal = unitPrice * quantity;
+            total_amount += itemTotal;
 
             processedItems.push({
                 medicineId: medicine.id,
-                quantity: item.quantity,
-                price: itemPrice,
-                medicine: medicine // سنحتاجه لتحديث المخزون لاحقاً
+                quantity: quantity,
+                unit_price: unitPrice,
+                total_price: itemTotal,
+                medicine: medicine
             });
         }
 
-        // 2. إنشاء الفاتورة الرئيسية
-        const sale = await Sale.create({ total_amount }, { transaction: t });
+        const sale = await Sale.create({ 
+            total_amount, 
+            customer_name: customer_name || "Guest", 
+            payment_type: payment_type || "cash" 
+        }, { transaction: t });
 
-        // 3. إنشاء تفاصيل الفاتورة وتحديث المخزون
         for (const pItem of processedItems) {
             await SaleItem.create({
                 saleId: sale.id,
                 medicineId: pItem.medicineId,
                 quantity: pItem.quantity,
-                price: pItem.price
+                unit_price: pItem.unit_price,
+                total_price: pItem.total_price
             }, { transaction: t });
 
-            // خصم الكمية من المخزون
             await pItem.medicine.update({
                 stock_quantity: pItem.medicine.stock_quantity - pItem.quantity
             }, { transaction: t });
         }
 
-        // اعتماد العملية بنجاح
         await t.commit();
+
+        const fullSale = await Sale.findByPk(sale.id, {
+            include: [
+                { 
+                    model: SaleItem, 
+                    as: "items",
+                    include: [{ model: Medicine, as: "medicine" }] 
+                }
+            ]
+        });
         
         return res.status(201).json({
+            success: true,
             message: "Sale processed successfully",
-            saleId: sale.id,
-            total_amount
+            sale: fullSale
         });
 
     } catch (error) {
-        // إلغاء العملية كاملة في حال حدوث أي خطأ
         await t.rollback();
-        return res.status(500).json({ error: error.message });
+        console.error(error);
+        return res.status(400).json({ success: false, msg: error.message });
     }
 };
 
-// استعراض جميع المبيعات
 exports.getAllSales = async (req, res) => {
     try {
-        const sales = await Sale.findAll({ include: [{ model: SaleItem }] });
+        const sales = await Sale.findAll({ 
+            include: [
+                { 
+                    model: SaleItem, 
+                    as: "items",
+                    include: [{ model: Medicine, as: "medicine" }] 
+                }
+            ],
+            order: [['createdAt', 'DESC']]
+        });
         res.status(200).json(sales);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error(error);
+        res.status(500).json({ msg: "Server Error", error: error.message });
     }
 };
