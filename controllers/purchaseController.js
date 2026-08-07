@@ -39,7 +39,8 @@ exports.createPurchase = async (req, res) => {
         const purchase = await Purchase.create({
             supplierId,
             invoice_number,
-            total_amount
+            total_amount,
+            userId: req.user.id
         }, { transaction: t });
 
         for (const item of items) {

@@ -41,7 +41,8 @@ exports.createSale = async (req, res) => {
         const sale = await Sale.create({ 
             total_amount, 
             customer_name: customer_name || "Guest", 
-            payment_type: payment_type || "cash" 
+            payment_type: payment_type || "cash",
+            userId: req.user.id
         }, { transaction: t });
 
         for (const pItem of processedItems) {

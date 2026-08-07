@@ -15,6 +15,13 @@ Medicine.belongsTo(Category, { foreignKey: "categoryId", as: "category" });
 Supplier.hasMany(Medicine, { foreignKey: "supplierId", as: "medicines" });
 Medicine.belongsTo(Supplier, { foreignKey: "supplierId", as: "supplier" });
 
+// User associations
+User.hasMany(Sale, { foreignKey: "userId", as: "sales" });
+Sale.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+User.hasMany(Purchase, { foreignKey: "userId", as: "purchases" });
+Purchase.belongsTo(User, { foreignKey: "userId", as: "user" });
+
 // Purchase - Supplier
 Supplier.hasMany(Purchase, { foreignKey: "supplierId", as: "purchases" });
 Purchase.belongsTo(Supplier, { foreignKey: "supplierId", as: "supplier" });

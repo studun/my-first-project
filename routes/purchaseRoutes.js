@@ -4,6 +4,6 @@ const { getAllPurchases, createPurchase } = require("../controllers/purchaseCont
 const { auth, checkRole } = require("../middleware/auth");
 
 router.get("/", auth, getAllPurchases);
-router.post("/", auth, checkRole(["admin", "pharmacist"]), createPurchase);
+router.post("/", auth, checkRole(["admin", "pharmacist", "inventory_manager"]), createPurchase);
 
 module.exports = router;

@@ -43,62 +43,215 @@ async function renderDashboard() {
         const stats = await apiRequest("/dashboard/stats");
         sectionContent.innerHTML = `
             <div class="row mb-4">
-                <div class="col-md-3">
-                    <div class="card bg-primary text-white stats-card shadow p-3">
-                        <h5>Total Medicines</h5>
-                        <h3>${stats.totalMedicines}</h3>
+                <div class="col-md-3 mb-3">
+                    <div class="card bg-primary text-white stats-card shadow p-3 border-0">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small>Total Medicines</small>
+                                <h3>${stats.totalMedicines}</h3>
+                            </div>
+                            <i class="bi bi-capsule fs-1 opacity-50"></i>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card bg-success text-white stats-card shadow p-3">
-                        <h5>Total Sales</h5>
-                        <h3>$${stats.totalSales}</h3>
+                <div class="col-md-3 mb-3">
+                    <div class="card bg-success text-white stats-card shadow p-3 border-0">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small>Total Sales</small>
+                                <h3>$${stats.totalSales.toLocaleString()}</h3>
+                            </div>
+                            <i class="bi bi-cart-check fs-1 opacity-50"></i>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card bg-warning text-dark stats-card shadow p-3">
-                        <h5>Low Stock</h5>
-                        <h3>${stats.lowStockCount}</h3>
+                <div class="col-md-3 mb-3">
+                    <div class="card bg-warning text-dark stats-card shadow p-3 border-0">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small>Low Stock</small>
+                                <h3>${stats.lowStockCount}</h3>
+                            </div>
+                            <i class="bi bi-exclamation-triangle fs-1 opacity-50"></i>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card bg-danger text-white stats-card shadow p-3">
-                        <h5>Total Purchases</h5>
-                        <h3>$${stats.totalPurchases}</h3>
+                <div class="col-md-3 mb-3">
+                    <div class="card bg-danger text-white stats-card shadow p-3 border-0">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small>Expired Medicines</small>
+                                <h3>${stats.expiredCount}</h3>
+                            </div>
+                            <i class="bi bi-calendar-x fs-1 opacity-50"></i>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="card shadow p-4 mt-4">
-                <h4>Recent Sales</h4>
-                <table class="table table-striped mt-3">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Customer</th>
-                            <th>Total</th>
-                            <th>Items</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${stats.latestSales.map(sale => `
-                            <tr>
-                                <td>${new Date(sale.createdAt).toLocaleDateString()}</td>
-                                <td>${sale.customer_name || "N/A"}</td>
-                                <td>$${sale.total_amount}</td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-info" onclick='viewSaleDetails(${JSON.stringify(sale.items).replace(/'/g, "&apos;")})'>
-                                        ${sale.items ? sale.items.length : 0} items
-                                    </button>
-                                </td>
-                            </tr>
-                        `).join("")}
-                    </tbody>
-                </table>
+            
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card shadow border-0 p-4">
+                        <h4 class="mb-4">Recent Sales</h4>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Customer</th>
+                                        <th>Total</th>
+                                        <th>Cashier</th>
+                                        <th>Items</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${stats.latestSales.map(sale => `
+                                        <tr>
+                                            <td>${new Date(sale.createdAt).toLocaleString()}</td>
+                                            <td>${sale.customer_name || "Guest"}</td>
+                                            <td>$${sale.total_amount}</td>
+                                            <td>${sale.user ? sale.user.name : "System"}</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-info" onclick='viewSaleDetails(${JSON.stringify(sale.items).replace(/'/g, "&apos;")})'>
+                                                    ${sale.items ? sale.items.length : 0} items
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `).join("")}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow border-0 p-4">
+                        <h4 class="mb-4">Monthly Target</h4>
+                        <div class="text-center">
+                            <h2 class="text-success">$${stats.monthlySales.toLocaleString()}</h2>
+                            <p class="text-muted">Sales this month</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     } catch (err) {
         sectionContent.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
     }
+}
+
+// Barcode Scanner Support
+let barcodeBuffer = "";
+let lastKeyTime = Date.now();
+
+document.addEventListener("keypress", (e) => {
+    const currentTime = Date.now();
+    
+    // Check if keypresses are fast enough to be from a scanner (usually < 50ms)
+    if (currentTime - lastKeyTime > 100) {
+        barcodeBuffer = "";
+    }
+    
+    lastKeyTime = currentTime;
+
+    if (e.key === "Enter") {
+        if (barcodeBuffer.length > 2) {
+            handleBarcodeScanned(barcodeBuffer);
+            barcodeBuffer = "";
+        }
+    } else {
+        barcodeBuffer += e.key;
+    }
+});
+
+async function handleBarcodeScanned(barcode) {
+    try {
+        const medicines = await apiRequest("/medicines");
+        const medicine = medicines.find(m => m.barcode === barcode);
+        
+        if (medicine) {
+            if (document.getElementById("saleModal") && document.getElementById("saleModal").classList.contains("show")) {
+                addItemToSale(medicine);
+            } else {
+                alert(`Scanned: ${medicine.name} (Stock: ${medicine.stock_quantity})`);
+            }
+        } else {
+            console.warn(`Barcode not found: ${barcode}`);
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function addItemToSale(medicine) {
+    const container = document.getElementById("sale-items-container");
+    const existingRow = Array.from(container.querySelectorAll(".sale-item-row")).find(row => 
+        row.querySelector(".medicine-select").value == medicine.id
+    );
+
+    if (existingRow) {
+        const qtyInput = existingRow.querySelector(".qty-input");
+        qtyInput.value = parseInt(qtyInput.value) + 1;
+        qtyInput.dispatchEvent(new Event('input'));
+    } else {
+        addSaleItemRow(medicine);
+    }
+}
+
+function addSaleItemRow(preSelectedMed = null) {
+    const container = document.getElementById('sale-items-container');
+    
+    // If it's the first empty row, just populate it
+    const firstRow = container.querySelector('.sale-item-row');
+    if (preSelectedMed && firstRow && !firstRow.querySelector('.medicine-select').value) {
+        populateRowWithMedicine(firstRow, preSelectedMed);
+        return;
+    }
+
+    // Otherwise clone and append
+    const medicines = JSON.parse(container.getAttribute('data-medicines') || '[]');
+    const rowHtml = `
+        <div class="row g-2 mb-2 sale-item-row">
+            <div class="col-md-5">
+                <select class="form-select medicine-select" required>
+                    <option value="">Select Medicine</option>
+                    ${medicines.map(m => `
+                        <option value="${m.id}" data-price="${m.selling_price}" data-stock="${m.stock_quantity}">
+                            ${m.name} (${m.stock_quantity} in stock)
+                        </option>
+                    `).join("")}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <input type="number" class="form-control qty-input" placeholder="Qty" min="1" required>
+            </div>
+            <div class="col-md-3">
+                <div class="input-group">
+                    <span class="input-group-text">$</span>
+                    <input type="number" step="0.01" class="form-control price-input" placeholder="Price" readonly>
+                </div>
+            </div>
+            <div class="col-md-1">
+                <button type="button" class="btn btn-outline-danger btn-sm remove-item">×</button>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', rowHtml);
+    const newRow = container.lastElementChild;
+    setupRowEvents(newRow);
+    
+    if (preSelectedMed) {
+        populateRowWithMedicine(newRow, preSelectedMed);
+    }
+}
+
+function populateRowWithMedicine(row, medicine) {
+    const select = row.querySelector('.medicine-select');
+    select.value = medicine.id;
+    row.querySelector('.price-input').value = medicine.selling_price;
+    row.querySelector('.qty-input').value = 1;
+    row.querySelector('.qty-input').max = medicine.stock_quantity;
+    updateSaleTotal();
 }
 
 async function renderMedicines() {

@@ -17,8 +17,8 @@ const upload = multer({ storage: storage });
 router.get("/", auth, getAllMedicines);
 router.get("/low-stock", auth, getLowStock);
 router.get("/expired", auth, getExpired);
-router.post("/", auth, checkRole(["admin", "pharmacist"]), upload.single("image"), createMedicine);
-router.put("/:id", auth, checkRole(["admin", "pharmacist"]), upload.single("image"), updateMedicine);
+router.post("/", auth, checkRole(["admin", "pharmacist", "inventory_manager"]), upload.single("image"), createMedicine);
+router.put("/:id", auth, checkRole(["admin", "pharmacist", "inventory_manager"]), upload.single("image"), updateMedicine);
 router.delete("/:id", auth, checkRole(["admin"]), deleteMedicine);
 
 module.exports = router;
