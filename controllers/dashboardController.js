@@ -1,48 +1,45 @@
-const sequelize = require("sequelize");
-const { Medicine, Sale, Purchase, Category, Supplier, User, SaleItem } = require("../models");
-const { Op } = require("sequelize");
+const { Medicine, Sale, Purchase, SaleItem, User, sequelize } = require("../models");
+const { Op, col } = require("sequelize");
 
+/**
+ * @desc    Get dashboard statistics
+ */
 exports.getStats = async (req, res) => {
     try {
         const today = new Date();
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-        const totalMedicines = await Medicine.count();
-        const totalSales = await Sale.sum("total_amount") || 0;
-        const totalPurchases = await Purchase.sum("total_amount") || 0;
-        
-        const lowStockCount = await Medicine.count({
-            where: {
-                stock_quantity: {
-                    [Op.lte]: sequelize.col("low_stock_threshold")
+        // Execute all independent stats queries in parallel
+        const results = await Promise.all([
+            Medicine.count(),
+            Sale.sum("total_amount"),
+            Purchase.sum("total_amount"),
+            Medicine.count({
+                where: {
+                    stock_quantity: { [Op.lte]: col("low_stock_threshold") }
                 }
-            }
-        });
-
-        const expiredCount = await Medicine.count({
-            where: {
-                expiry_date: {
-                    [Op.lte]: today
+            }),
+            Medicine.count({
+                where: {
+                    expiry_date: { [Op.lte]: today }
                 }
-            }
-        });
+            }),
+            Sale.sum("total_amount", {
+                where: {
+                    createdAt: { [Op.gte]: startOfMonth }
+                }
+            }),
+            Sale.findAll({
+                limit: 5,
+                order: [["createdAt", "DESC"]],
+                include: [
+                    { model: SaleItem, as: "items", include: ["medicine"] },
+                    { model: User, as: "user", attributes: ["name"] }
+                ]
+            })
+        ]);
 
-        const monthlySales = await Sale.sum("total_amount", {
-            where: {
-                createdAt: { [Op.gte]: startOfMonth }
-            }
-        }) || 0;
-
-        const latestSales = await Sale.findAll({
-            limit: 5,
-            order: [["createdAt", "DESC"]],
-            include: [
-                { model: SaleItem, as: "items", include: ["medicine"] },
-                { model: User, as: "user", attributes: ["name"] }
-            ]
-        });
-
-        res.json({
+        const [
             totalMedicines,
             totalSales,
             totalPurchases,
@@ -50,9 +47,22 @@ exports.getStats = async (req, res) => {
             expiredCount,
             monthlySales,
             latestSales
+        ] = results;
+
+        res.json({
+            success: true,
+            stats: {
+                totalMedicines,
+                totalSales: totalSales || 0,
+                totalPurchases: totalPurchases || 0,
+                lowStockCount,
+                expiredCount,
+                monthlySales: monthlySales || 0,
+                latestSales: latestSales || []
+            }
         });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ msg: "Server Error" });
+        console.error(`[Dashboard Stats Error]: ${err.message}`);
+        res.status(500).json({ success: false, message: "Failed to fetch dashboard stats" });
     }
 };

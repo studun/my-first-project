@@ -11,12 +11,19 @@ const Sale = sequelize.define(
         },
         sale_date: {
             type: DataTypes.DATE,
-            defaultValue: DataTypes.NOW
+            defaultValue: DataTypes.NOW,
+            validate: {
+                isDate: true
+            }
         },
         total_amount: {
             type: DataTypes.DECIMAL(10, 2),
             allowNull: false,
-            defaultValue: 0.00
+            defaultValue: 0.00,
+            validate: {
+                min: 0,
+                isDecimal: true
+            }
         },
         customer_name: {
             type: DataTypes.STRING,
@@ -29,7 +36,10 @@ const Sale = sequelize.define(
     },
     {
         tableName: "sales",
-        timestamps: true
+        timestamps: true,
+        indexes: [
+            { fields: ["sale_date"] }
+        ]
     }
 );
 

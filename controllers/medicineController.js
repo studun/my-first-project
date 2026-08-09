@@ -1,88 +1,114 @@
-const { Medicine, Category, Supplier, sequelize } = require("../models");
+const { Medicine, Category, Supplier, Purchase, PurchaseItem } = require("../models");
+const sequelize = require("../config/database");
 const { Op } = require("sequelize");
 
+/**
+ * @desc    Get all medicines
+ */
 exports.getAllMedicines = async (req, res) => {
     try {
         const medicines = await Medicine.findAll({
-            include: [
-                { model: Category, as: "category" },
-                { model: Supplier, as: "supplier" }
-            ]
+            order: [["name", "ASC"]]
         });
-        res.json(medicines);
+        res.status(200).json({ success: true, medicines });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ msg: "Server Error", error: err.message });
+        console.error(`[Medicine GetAll Error]: ${err.message}`);
+        res.status(500).json({ success: false, message: "Failed to fetch medicines" });
     }
 };
 
+/**
+ * @desc    Create a new medicine
+ */
 exports.createMedicine = async (req, res) => {
-    const { name, generic_name, batch_number, expiry_date, buying_price, selling_price, stock_quantity, low_stock_threshold, categoryId, supplierId, side_effects } = req.body;
-    const image = req.file ? req.file.filename : null;
-
     try {
-        if (!name || !expiry_date || buying_price === undefined || selling_price === undefined) {
-            return res.status(400).json({ msg: "Please provide all required fields" });
-        }
+        const { name, price, quantity } = req.body;
+        const parsedPrice = parseFloat(price) || 0;
+        const parsedQuantity = parseInt(quantity, 10) || 0;
 
         const medicine = await Medicine.create({
-            name, generic_name, batch_number, expiry_date, 
-            buying_price: parseFloat(buying_price), 
-            selling_price: parseFloat(selling_price), 
-            stock_quantity: parseInt(stock_quantity) || 0, 
-            low_stock_threshold: parseInt(low_stock_threshold) || 10, 
-            categoryId, supplierId, side_effects, image
+            name: name || "Unnamed Medicine",
+            buying_price: parsedPrice,
+            selling_price: parsedPrice,
+            stock_quantity: parsedQuantity,
+            expiry_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
         });
-        res.status(201).json(medicine);
+
+        res.status(201).json({ success: true, medicine });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ msg: "Server Error", error: err.message });
+        console.error(`[Medicine Create Error]: ${err.message}`);
+        res.status(400).json({ error: err.message });
     }
 };
 
-exports.updateMedicine = async (req, res) => {
-    const { name, generic_name, batch_number, expiry_date, buying_price, selling_price, stock_quantity, low_stock_threshold, categoryId, supplierId, side_effects } = req.body;
+/**
+ * @desc    Mark medicine as expired
+ */
+exports.expireMedicine = async (req, res) => {
     try {
-        let medicine = await Medicine.findByPk(req.params.id);
-        if (!medicine) return res.status(404).json({ msg: "Medicine not found" });
-
-        if (req.file) {
-            medicine.image = req.file.filename;
+        const medicine = await Medicine.findByPk(req.params.id);
+        if (!medicine) {
+            return res.status(404).json({ error: "Medicine not found" });
         }
 
-        medicine.name = name !== undefined ? name : medicine.name;
-        medicine.generic_name = generic_name !== undefined ? generic_name : medicine.generic_name;
-        medicine.batch_number = batch_number !== undefined ? batch_number : medicine.batch_number;
-        medicine.expiry_date = expiry_date !== undefined ? expiry_date : medicine.expiry_date;
-        medicine.buying_price = buying_price !== undefined ? parseFloat(buying_price) : medicine.buying_price;
-        medicine.selling_price = selling_price !== undefined ? parseFloat(selling_price) : medicine.selling_price;
-        medicine.stock_quantity = stock_quantity !== undefined ? parseInt(stock_quantity) : medicine.stock_quantity;
-        medicine.low_stock_threshold = low_stock_threshold !== undefined ? parseInt(low_stock_threshold) : medicine.low_stock_threshold;
-        medicine.categoryId = categoryId !== undefined ? categoryId : medicine.categoryId;
-        medicine.supplierId = supplierId !== undefined ? supplierId : medicine.supplierId;
-        medicine.side_effects = side_effects !== undefined ? side_effects : medicine.side_effects;
-
-        await medicine.save();
-        res.json(medicine);
+        await medicine.update({ 
+            expiry_date: new Date().toISOString().split('T')[0],
+            stock_quantity: 0 
+        });
+        res.json({ success: true, message: "Medicine marked as expired successfully" });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ msg: "Server Error", error: err.message });
+        console.error(`[Medicine Expire Error]: ${err.message}`);
+        res.status(400).json({ error: err.message });
     }
 };
 
+/**
+ * @desc    Update medicine details
+ */
+exports.updateMedicine = async (req, res) => {
+    try {
+        const medicine = await Medicine.findByPk(req.params.id);
+        if (!medicine) {
+            return res.status(404).json({ success: false, message: "Medicine not found" });
+        }
+
+        const updateData = { ...req.body };
+        if (req.file) {
+            updateData.image = req.file.filename;
+        }
+
+        await medicine.update(updateData);
+        res.json({ success: true, medicine });
+    } catch (err) {
+        console.error(`[Medicine Update Error]: ${err.message}`);
+        res.status(400).json({ success: false, message: err.message });
+    }
+};
+
+/**
+ * @desc    Delete medicine (RESTRICTED if has sales/purchases)
+ */
 exports.deleteMedicine = async (req, res) => {
     try {
-        let medicine = await Medicine.findByPk(req.params.id);
-        if (!medicine) return res.status(404).json({ msg: "Medicine not found" });
+        const medicine = await Medicine.findByPk(req.params.id);
+        if (!medicine) {
+            return res.status(404).json({ success: false, message: "Medicine not found" });
+        }
 
         await medicine.destroy();
-        res.json({ msg: "Medicine removed" });
+        res.json({ success: true, message: "Medicine removed successfully" });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ msg: "Server Error", error: err.message });
+        console.error(`[Medicine Delete Error]: ${err.message}`);
+        const message = err.name === "SequelizeForeignKeyConstraintError" 
+            ? "Cannot delete medicine with existing transaction history" 
+            : "Failed to delete medicine";
+        res.status(400).json({ success: false, message });
     }
 };
 
+/**
+ * @desc    Get medicines below stock threshold
+ */
 exports.getLowStock = async (req, res) => {
     try {
         const medicines = await Medicine.findAll({
@@ -90,15 +116,19 @@ exports.getLowStock = async (req, res) => {
                 stock_quantity: {
                     [Op.lte]: sequelize.col("low_stock_threshold")
                 }
-            }
+            },
+            include: ["category"]
         });
-        res.json(medicines);
+        res.json({ success: true, count: medicines.length, medicines });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ msg: "Server Error", error: err.message });
+        console.error(`[Medicine LowStock Error]: ${err.message}`);
+        res.status(500).json({ success: false, message: "Failed to fetch low stock alert" });
     }
 };
 
+/**
+ * @desc    Get medicines that have expired or are expiring
+ */
 exports.getExpired = async (req, res) => {
     try {
         const today = new Date();
@@ -107,11 +137,12 @@ exports.getExpired = async (req, res) => {
                 expiry_date: {
                     [Op.lte]: today
                 }
-            }
+            },
+            include: ["category"]
         });
-        res.json(medicines);
+        res.json({ success: true, count: medicines.length, medicines });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ msg: "Server Error", error: err.message });
+        console.error(`[Medicine Expired Error]: ${err.message}`);
+        res.status(500).json({ success: false, message: "Failed to fetch expired medicines" });
     }
 };

@@ -1,64 +1,75 @@
-const bcrypt = require("bcryptjs");
 const { User, Category, Supplier, Medicine } = require("./models");
 const sequelize = require("./config/database");
+require("dotenv").config();
 
 async function seed() {
     try {
-        await sequelize.sync({ force: true });
-        console.log("Database synced (forced)");
+        // Authenticate connection
+        await sequelize.authenticate();
+        console.log("Connected to database for seeding...");
 
-        // 1. Admin User
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash("admin123", salt);
+        // Ensure tables exist without dropping them (Production safe)
+        await sequelize.sync();
+
+        // 1. Seed Admin User if none exists
+        const adminEmail = "admin@pharmacy.com";
+        const existingAdmin = await User.findOne({ where: { email: adminEmail } });
         
-        const admin = await User.create({
-            name: "System Admin",
-            email: "admin@pharmacy.com",
-            password: hashedPassword,
-            role: "admin"
-        });
-        console.log("Admin user created");
+        if (!existingAdmin) {
+            await User.create({
+                name: "System Admin",
+                email: adminEmail,
+                password: "admin123", // Model hook 'beforeSave' will handle hashing
+                role: "admin"
+            });
+            console.log("✔ Admin user created.");
+        } else {
+            console.log("ℹ Admin user already exists, skipping...");
+        }
 
-        // 2. Categories
-        const cat1 = await Category.create({ name: "Antibiotics", description: "Medicines that fight bacterial infections" });
-        const cat2 = await Category.create({ name: "Painkillers", description: "Medicines that relieve pain" });
-        console.log("Categories created");
+        // 2. Seed Categories
+        const categories = [
+            { name: "Antibiotics", description: "Medicines that fight bacterial infections" },
+            { name: "Painkillers", description: "Medicines that relieve pain" },
+            { name: "Supplements", description: "Vitamins and minerals" }
+        ];
 
-        // 3. Suppliers
-        const sup1 = await Supplier.create({ name: "PharmaCorp", phone: "123456789", email: "info@pharmacorp.com" });
-        const sup2 = await Supplier.create({ name: "MediDist", phone: "987654321", email: "contact@medidist.com" });
-        console.log("Suppliers created");
+        for (const cat of categories) {
+            const [record, created] = await Category.findOrCreate({
+                where: { name: cat.name },
+                defaults: cat
+            });
+            if (created) console.log(`✔ Category '${cat.name}' created.`);
+        }
 
-        // 4. Medicines
-        await Medicine.create({
-            name: "Amoxicillin",
-            generic_name: "Amoxicillin 500mg",
-            categoryId: cat1.id,
-            supplierId: sup1.id,
-            buying_price: 5.00,
-            selling_price: 10.00,
-            stock_quantity: 50,
-            expiry_date: "2027-12-31"
-        });
+        // 3. Seed Suppliers
+        const suppliers = [
+            { name: "PharmaCorp", phone: "123456789", email: "info@pharmacorp.com" },
+            { name: "MediDist", phone: "987654321", email: "contact@medidist.com" }
+        ];
 
-        await Medicine.create({
-            name: "Paracetamol",
-            generic_name: "Acetaminophen 500mg",
-            categoryId: cat2.id,
-            supplierId: sup2.id,
-            buying_price: 2.00,
-            selling_price: 5.00,
-            stock_quantity: 100,
-            expiry_date: "2026-06-30"
-        });
-        console.log("Medicines created");
+        for (const sup of suppliers) {
+            const [record, created] = await Supplier.findOrCreate({
+                where: { name: sup.name },
+                defaults: sup
+            });
+            if (created) console.log(`✔ Supplier '${sup.name}' created.`);
+        }
 
-        console.log("Seeding completed successfully!");
+        console.log("Seeding process finished.");
     } catch (err) {
-        console.error("Seeding error:", err);
+        console.error("✘ Seeding error:", err);
     } finally {
-        process.exit();
+        // Only exit if run as a standalone script
+        if (require.main === module) {
+            process.exit();
+        }
     }
 }
 
-seed();
+// Execute if run directly
+if (require.main === module) {
+    seed();
+}
+
+module.exports = seed;

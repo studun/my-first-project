@@ -11,7 +11,10 @@ const Supplier = sequelize.define(
         },
         name: {
             type: DataTypes.STRING,
-            allowNull: false
+            allowNull: false,
+            validate: {
+                notEmpty: true
+            }
         },
         contact_person: {
             type: DataTypes.STRING,
@@ -19,11 +22,17 @@ const Supplier = sequelize.define(
         },
         phone: {
             type: DataTypes.STRING,
-            allowNull: false
+            allowNull: false,
+            validate: {
+                notEmpty: true
+            }
         },
         email: {
             type: DataTypes.STRING,
-            allowNull: true
+            allowNull: true,
+            validate: {
+                isEmail: true
+            }
         },
         address: {
             type: DataTypes.TEXT,

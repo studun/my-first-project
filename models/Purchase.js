@@ -11,12 +11,19 @@ const Purchase = sequelize.define(
         },
         purchase_date: {
             type: DataTypes.DATE,
-            defaultValue: DataTypes.NOW
+            defaultValue: DataTypes.NOW,
+            validate: {
+                isDate: true
+            }
         },
         total_amount: {
             type: DataTypes.DECIMAL(10, 2),
             allowNull: false,
-            defaultValue: 0.00
+            defaultValue: 0.00,
+            validate: {
+                min: 0,
+                isDecimal: true
+            }
         },
         invoice_number: {
             type: DataTypes.STRING,
@@ -25,7 +32,11 @@ const Purchase = sequelize.define(
     },
     {
         tableName: "purchases",
-        timestamps: true
+        timestamps: true,
+        indexes: [
+            { fields: ["purchase_date"] },
+            { fields: ["invoice_number"] }
+        ]
     }
 );
 
